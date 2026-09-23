@@ -46,13 +46,12 @@
 
   <script>
     const APP_ID = '1089';
-    let ws;
+    let ws = null;
 
     window.onload = () => {
       const savedToken = localStorage.getItem('saltrade_token');
       if (savedToken) {
         document.getElementById('api-token').value = savedToken;
-        connectWithToken(savedToken);
       }
     };
 
@@ -69,11 +68,17 @@
     function connectWithToken(token) {
       document.getElementById('login-section').style.display = 'none';
       document.getElementById('account-section').style.display = 'block';
-      document.getElementById('status').innerText = 'Connecting to Deriv WebSocket...';
+      document.getElementById('status').innerText = 'Connecting to Deriv...';
+      document.getElementById('status').style.color = '#38bdf8';
+
+      if (ws) {
+        ws.close();
+      }
 
       ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
       ws.onopen = () => {
+        document.getElementById('status').innerText = 'Authenticating token...';
         ws.send(JSON.stringify({ authorize: token }));
       };
 
@@ -81,7 +86,7 @@
         const response = JSON.parse(msg.data);
 
         if (response.error) {
-          document.getElementById('status').innerText = 'Error: ' + response.error.message;
+          document.getElementById('status').innerText = 'Auth Error: ' + response.error.message;
           document.getElementById('status').style.color = '#f87171';
           return;
         }
@@ -90,6 +95,7 @@
           document.getElementById('status').innerText = 'Connected & Authorized!';
           document.getElementById('status').style.color = '#4ade80';
           document.getElementById('acct-id').innerText = response.authorize.loginid;
+          
           ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
         }
 
