@@ -1,10 +1,71 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>SALTRADE</title>
-  </head>
-  <body>
-    <h1>Welcome to SALTRADE</h1>
-    <p>Deriv Bot Platform</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SALTRADE - Deriv Trading Bot</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #111827; color: #fff; text-align: center; padding: 40px; }
+    .card { background: #1f2937; padding: 25px; border-radius: 10px; max-width: 450px; margin: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    button { background: #ff444f; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #e03a44; }
+    #status { margin-top: 15px; font-weight: bold; color: #10b981; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>SALTRADE</h1>
+    <p>Deriv Automated Trading Platform</p>
+    <div id="login-section">
+      <button onclick="login()">Connect Deriv Account</button>
+    </div>
+    <div id="account-section" style="display:none;">
+      <p id="status">Connecting to WebSocket...</p>
+      <p>Account ID: <span id="acct-id">-</span></p>
+      <p>Balance: <span id="balance">-</span></p>
+    </div>
+  </div>
+
+  <script>
+    const APP_ID = '34tVcd4y13Y5Z6PnBmQ4';
+
+    function login() {
+      const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN`;
+      window.location.href = authUrl;
+    }
+
+    // Handle OAuth Callback Tokens from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const token1 = urlParams.get('token1');
+    const acct1 = urlParams.get('acct1');
+
+    if (token1) {
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('account-section').style.display = 'block';
+      document.getElementById('acct-id').innerText = acct1;
+
+      // Establish WebSocket Connection
+      const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+
+      ws.onopen = () => {
+        // Authorize with token
+        ws.send(JSON.stringify({ authorize: token1 }));
+      };
+
+      ws.onmessage = (msg) => {
+        const response = JSON.parse(msg.data);
+        if (response.msg_type === 'authorize') {
+          document.getElementById('status').innerText = 'Connected & Authorized!';
+          // Request Balance
+          ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
+        }
+        if (response.msg_type === 'balance') {
+          document.getElementById('balance').innerText = `${response.balance.balance} ${response.balance.currency}`;
+        }
+      };
+    }
+  </script>
+
+</body>
 </html>
