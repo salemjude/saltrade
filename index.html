@@ -5,11 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SALTRADE - Deriv Trading Bot</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #111827; color: #fff; text-align: center; padding: 40px; }
-    .card { background: #1f2937; padding: 25px; border-radius: 10px; max-width: 450px; margin: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    button { background: #ff444f; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding: 40px 20px; margin: 0; }
+    .card { background: #1e293b; padding: 30px; border-radius: 12px; max-width: 480px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; }
+    h1 { margin-top: 0; color: #ff444f; font-size: 28px; }
+    p { color: #94a3b8; }
+    input { width: 85%; padding: 12px; margin: 15px 0; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; text-align: center; outline: none; }
+    input:focus { border-color: #ff444f; }
+    button { background: #ff444f; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
     button:hover { background: #e03a44; }
-    #status { margin-top: 15px; font-weight: bold; color: #10b981; }
+    .status { margin-top: 20px; font-weight: bold; color: #38bdf8; }
+    .info-box { background: #0f172a; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #334155; text-align: left; }
+    .info-item { display: flex; justify-content: space-between; margin: 8px 0; font-size: 15px; }
+    .val { font-weight: bold; color: #4ade80; }
+    .btn-disconnect { background: #475569; margin-top: 15px; font-size: 13px; padding: 8px 16px; }
+    .btn-disconnect:hover { background: #334155; }
   </style>
 </head>
 <body>
@@ -17,53 +26,91 @@
   <div class="card">
     <h1>SALTRADE</h1>
     <p>Deriv Automated Trading Platform</p>
+
     <div id="login-section">
-      <button onclick="login()">Connect Deriv Account</button>
+      <input type="password" id="api-token" placeholder="Paste your Deriv API Token here">
+      <br>
+      <button onclick="saveAndConnect()">Connect SALTRADE</button>
     </div>
+
     <div id="account-section" style="display:none;">
-      <p id="status">Connecting to WebSocket...</p>
-      <p>Account ID: <span id="acct-id">-</span></p>
-      <p>Balance: <span id="balance">-</span></p>
+      <div class="status" id="status">Connecting to WebSocket...</div>
+      <div class="info-box">
+        <div class="info-item"><span>Account ID:</span> <span class="val" id="acct-id">-</span></div>
+        <div class="info-item"><span>Balance:</span> <span class="val" id="balance">-</span></div>
+        <div class="info-item"><span>Currency:</span> <span class="val" id="currency">-</span></div>
+      </div>
+      <button class="btn-disconnect" onclick="disconnect()">Disconnect / Change Token</button>
     </div>
   </div>
 
   <script>
     const APP_ID = '34tVcd4y13Y5Z6PnBmQ4';
+    let ws;
 
-    function login() {
-      const authUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN`;
-      window.location.href = authUrl;
+    window.onload = () => {
+      const savedToken = localStorage.getItem('saltrade_token');
+      if (savedToken) {
+        document.getElementById('api-token').value = savedToken;
+        connectWithToken(savedToken);
+      }
+    };
+
+    function saveAndConnect() {
+      const token = document.getElementById('api-token').value.trim();
+      if (!token) {
+        alert('Please paste a valid Deriv API Token');
+        return;
+      }
+      localStorage.setItem('saltrade_token', token);
+      connectWithToken(token);
     }
 
-    // Handle OAuth Callback Tokens from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const token1 = urlParams.get('token1');
-    const acct1 = urlParams.get('acct1');
-
-    if (token1) {
+    function connectWithToken(token) {
       document.getElementById('login-section').style.display = 'none';
       document.getElementById('account-section').style.display = 'block';
-      document.getElementById('acct-id').innerText = acct1;
+      document.getElementById('status').innerText = 'Connecting to Deriv WebSocket...';
 
-      // Establish WebSocket Connection
-      const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+      ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
       ws.onopen = () => {
-        // Authorize with token
-        ws.send(JSON.stringify({ authorize: token1 }));
+        ws.send(JSON.stringify({ authorize: token }));
       };
 
       ws.onmessage = (msg) => {
         const response = JSON.parse(msg.data);
+
+        if (response.error) {
+          document.getElementById('status').innerText = 'Error: ' + response.error.message;
+          document.getElementById('status').style.color = '#f87171';
+          return;
+        }
+
         if (response.msg_type === 'authorize') {
           document.getElementById('status').innerText = 'Connected & Authorized!';
-          // Request Balance
+          document.getElementById('status').style.color = '#4ade80';
+          document.getElementById('acct-id').innerText = response.authorize.loginid;
           ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
         }
+
         if (response.msg_type === 'balance') {
-          document.getElementById('balance').innerText = `${response.balance.balance} ${response.balance.currency}`;
+          document.getElementById('balance').innerText = response.balance.balance.toFixed(2);
+          document.getElementById('currency').innerText = response.balance.currency;
         }
       };
+
+      ws.onerror = () => {
+        document.getElementById('status').innerText = 'WebSocket Connection Failed!';
+        document.getElementById('status').style.color = '#f87171';
+      };
+    }
+
+    function disconnect() {
+      localStorage.removeItem('saltrade_token');
+      if (ws) ws.close();
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('account-section').style.display = 'none';
+      document.getElementById('api-token').value = '';
     }
   </script>
 
